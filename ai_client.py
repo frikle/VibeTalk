@@ -1,4 +1,5 @@
 # ai_client.py
+import os
 import aiohttp
 import asyncio
 import re
