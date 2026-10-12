@@ -644,7 +644,6 @@ def my_words_keyboard(words: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-# Словарь сценариев для быстрого доступа
 SCENARIOS = {
     "cafe": "☕️ В кафе — вы заказываете кофе и десерт, общаетесь с бариста",
     "hotel": "🏨 В отеле — вы заселяетесь, уточняете условия, решаете проблему с номером",
@@ -661,7 +660,6 @@ SCENARIOS = {
     "slang": "💬 Сленг и идиомы — разговор о современном сленге и выражениях",
 }
 
-# Шаблоны случайных сценариев
 RANDOM_SCENARIOS = [
     ("Вы — турист, который заблудился в незнакомом городе. ИИ — местный житель, который помогает найти дорогу.", "🚶 Заблудившийся турист"),
     ("Вы — покупатель в магазине гитар. ИИ — продавец-консультант, который помогает выбрать инструмент.", "🎸 Покупка гитары"),
@@ -677,7 +675,6 @@ RANDOM_SCENARIOS = [
 
 
 def get_random_scenario() -> tuple:
-    """Возвращает случайный сценарий из списка."""
     return random.choice(RANDOM_SCENARIOS)
 
 
@@ -686,7 +683,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(CommandStart())
     async def cmd_start(message: Message, state: FSMContext):
-        """Обработчик команды /start."""
         await state.clear()
         user_id = message.from_user.id
         await add_user(user_id)
@@ -706,7 +702,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("help"))
     async def cmd_help(message: Message):
-        """Обработчик команды /help."""
         help_text = (
             "📚 <b>Справка по боту</b>\n\n"
             "<b>Команды:</b>\n"
@@ -730,18 +725,15 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("settings"))
     async def cmd_settings(message: Message):
-        """Обработчик команды /settings."""
         await message.answer("⚙️ Настройки:", reply_markup=settings_keyboard())
 
     @dp.message(Command("menu"))
     async def cmd_menu(message: Message):
-        """Обработчик команды /menu."""
         user = await get_user(message.from_user.id)
         await message.answer("🎭 Главное меню VibeTalk:", reply_markup=get_main_menu_keyboard(user['mode'], user['level']))
 
     @dp.message(Command("mode"))
     async def cmd_mode(message: Message):
-        """Обработчик команды /mode — выбор режима."""
         await message.answer(
             "👨‍🏫/🤝 Выбери режим общения:",
             reply_markup=mode_keyboard()
@@ -749,7 +741,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("level"))
     async def cmd_level(message: Message):
-        """Обработчик команды /level — выбор уровня."""
         await message.answer(
             "📊 Выбери свой уровень английского:",
             reply_markup=level_keyboard()
@@ -757,7 +748,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("topics"))
     async def cmd_topics(message: Message):
-        """Обработчик команды /topics — выбор темы."""
         await message.answer(
             "🎭 Выбор темы диалога:",
             reply_markup=scenarios_keyboard()
@@ -765,7 +755,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("random"))
     async def cmd_random(message: Message, state: FSMContext):
-        """Обработчик команды /random — случайный сценарий."""
         scenario_text, scenario_name = get_random_scenario()
         user_id = message.from_user.id
         await update_user(user_id, scenario=scenario_name, custom_context=scenario_text)
@@ -780,7 +769,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("custom"))
     async def cmd_custom(message: Message, state: FSMContext):
-        """Обработчик команды /custom — свой сценарий."""
         await state.set_state(CustomScenarioState.waiting_for_scenario)
         await message.answer(
             "✍️ Опиши свою ситуационную игру.\n\n"
@@ -793,7 +781,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(Command("words"))
     async def cmd_words(message: Message):
-        """Обработчик команды /words — словарь пользователя."""
         user_id = message.from_user.id
         words = await get_words(user_id)
         count = await get_word_count(user_id)
@@ -812,12 +799,11 @@ def register_handlers(dp: Dispatcher):
             ])
         )
 
-   @dp.callback_query(F.data == "back")
+    @dp.callback_query(F.data == "back")
     async def callback_back(callback: CallbackQuery):
         """Возврат в главное меню."""
         user = await get_user(callback.from_user.id)
         
-        # Если пользователя почему-то нет в базе, задаем дефолтные значения, чтобы код не упал
         if not user:
             mode = "teacher"
             level = "Intermediate"
@@ -825,18 +811,19 @@ def register_handlers(dp: Dispatcher):
             mode = user['mode']
             level = user['level']
             
-        await callback.message.edit_text("🎭 Главное меню VibeTalk:", reply_markup=get_main_menu_keyboard(mode, level))
+        await callback.message.edit_text(
+            "🎭 Главное меню VibeTalk:", 
+            reply_markup=get_main_menu_keyboard(mode, level)
+        )
         await callback.answer()
 
     @dp.callback_query(F.data == "menu:scenarios")
     async def callback_menu_scenarios(callback: CallbackQuery):
-        """Открытие подменю выбора темы диалога."""
         await callback.message.edit_text("🎭 Выбор темы диалога:", reply_markup=scenarios_keyboard())
         await callback.answer()
 
     @dp.callback_query(F.data.startswith("cat:"))
     async def callback_category(callback: CallbackQuery):
-        """Обработка выбора категории сценариев."""
         category = callback.data.split(":")[1]
         if category == "travel":
             await callback.message.edit_text("✈️ Travel & Life:", reply_markup=travel_keyboard())
@@ -850,7 +837,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("scen:"))
     async def callback_scenario(callback: CallbackQuery, state: FSMContext):
-        """Обработка выбора конкретного сценария."""
         scenario_key = callback.data.split(":")[1]
         scenario_name = SCENARIOS.get(scenario_key, scenario_key)
         user_id = callback.from_user.id
@@ -866,7 +852,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data == "custom")
     async def callback_custom(callback: CallbackQuery, state: FSMContext):
-        """Обработка кнопки 'Свой сценарий'."""
         await state.set_state(CustomScenarioState.waiting_for_scenario)
         await callback.message.edit_text(
             "✍️ Опиши свою ситуационную игру.\n\n"
@@ -880,7 +865,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data == "random")
     async def callback_random(callback: CallbackQuery, state: FSMContext):
-        """Обработка кнопки 'Случайный сценарий'."""
         scenario_text, scenario_name = get_random_scenario()
         user_id = callback.from_user.id
         await update_user(user_id, scenario=scenario_name, custom_context=scenario_text)
@@ -895,7 +879,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data == "set:mode")
     async def callback_set_mode(callback: CallbackQuery):
-        """Обработка кнопки смены режима."""
         await callback.message.edit_text(
             "👨\u200d🏫/🤝 Выбери режим общения:",
             reply_markup=mode_keyboard()
@@ -904,7 +887,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data == "set:level")
     async def callback_set_level(callback: CallbackQuery):
-        """Обработка кнопки смены уровня."""
         await callback.message.edit_text(
             "📊 Выбери свой уровень английского:",
             reply_markup=level_keyboard()
@@ -913,7 +895,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("mode:"))
     async def callback_mode(callback: CallbackQuery):
-        """Обработка выбора режима."""
         mode = callback.data.split(":")[1]
         user_id = callback.from_user.id
         await update_user(user_id, mode=mode)
@@ -926,7 +907,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("level:"))
     async def callback_level(callback: CallbackQuery):
-        """Обработка выбора уровня."""
         level = callback.data.split(":")[1]
         user_id = callback.from_user.id
         await update_user(user_id, level=level)
@@ -938,7 +918,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data == "my_words")
     async def callback_my_words(callback: CallbackQuery):
-        """Обработка кнопки 'Мои слова'."""
         user_id = callback.from_user.id
         words = await get_words(user_id)
         count = await get_word_count(user_id)
@@ -961,12 +940,10 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("word:"))
     async def callback_word_delete(callback: CallbackQuery):
-        """Обработка нажатия на слово в словаре."""
         word_id = int(callback.data.split(":")[1])
         user_id = callback.from_user.id
         await delete_word(user_id, word_id)
 
-        # Обновляем список
         words = await get_words(user_id)
         count = await get_word_count(user_id)
 
@@ -988,7 +965,6 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(CustomScenarioState.waiting_for_scenario)
     async def process_custom_scenario(message: Message, state: FSMContext):
-        """Обработка описания своего сценария."""
         user_id = message.from_user.id
         custom_text = message.text
         await update_user(user_id, scenario="✍️ Свой сценарий", custom_context=custom_text)
@@ -1003,28 +979,21 @@ def register_handlers(dp: Dispatcher):
 
     @dp.message(F.reply_to_message)
     async def process_reply_save_word(message: Message, state: FSMContext):
-        """Обработка Reply на сообщение бота — сохранение слова в словарь."""
         user_id = message.from_user.id
         word_text = message.text.strip()
 
-        # Проверяем, что это ответ на сообщение бота
         if message.reply_to_message and message.reply_to_message.from_user:
-            # Извлекаем слово из текста
             word = word_text.split('\n')[0].strip()
 
-            # Если пользователь написал слово в формате "слово — перевод"
             if '—' in word:
                 parts = word.split('—', 1)
                 word = parts[0].strip()
                 translation = parts[1].strip()
             else:
-                # Получаем чистый перевод через Groq
                 translation = await get_translation(word)
 
-            # Формируем красивый результат для пользователя
             result = f"✅ Слово сохранено!\n• {word} — {translation}"
 
-            # Сохраняем в базу данных
             added = await add_word(user_id, word, translation)
             if added:
                 await message.answer(result)
@@ -1033,12 +1002,10 @@ def register_handlers(dp: Dispatcher):
                     f"ℹ️ Слово {word} уже есть в твоём словаре."
                 )
         else:
-            # Если это не ответ на сообщение бота — обрабатываем как обычное сообщение
             await process_message(message, state)
 
     @dp.message()
     async def process_message(message: Message, state: FSMContext):
-        """Обработка всех текстовых сообщений — основной диалог с ИИ."""
         user_id = message.from_user.id
         user = await get_user(user_id)
 
@@ -1046,13 +1013,11 @@ def register_handlers(dp: Dispatcher):
             await add_user(user_id)
             user = await get_user(user_id)
 
-        # Показываем индикатор "печатает..." (с обработкой ошибок сети)
         try:
             await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         except Exception:
-            pass  # Игнорируем ошибки сети для индикатора печати
+            pass
 
-        # Повторные попытки при ошибках сети
         max_retries = 3
         for retry in range(max_retries):
             try:
