@@ -812,11 +812,20 @@ def register_handlers(dp: Dispatcher):
             ])
         )
 
-    @dp.callback_query(F.data == "back")
+   @dp.callback_query(F.data == "back")
     async def callback_back(callback: CallbackQuery):
         """Возврат в главное меню."""
         user = await get_user(callback.from_user.id)
-        await callback.message.edit_text("🎭 Главное меню VibeTalk:", reply_markup=get_main_menu_keyboard(user['mode'], user['level']))
+        
+        # Если пользователя почему-то нет в базе, задаем дефолтные значения, чтобы код не упал
+        if not user:
+            mode = "teacher"
+            level = "Intermediate"
+        else:
+            mode = user['mode']
+            level = user['level']
+            
+        await callback.message.edit_text("🎭 Главное меню VibeTalk:", reply_markup=get_main_menu_keyboard(mode, level))
         await callback.answer()
 
     @dp.callback_query(F.data == "menu:scenarios")
