@@ -2,6 +2,8 @@
 import os 
 import asyncio
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
@@ -9,6 +11,24 @@ from aiogram.types import BotCommand
 from database import create_tables
 from handlers import register_handlers
 from ai_client import BOT_TOKEN
+
+
+# Простой веб-сервер для прохождения проверки порта на Render
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"VibeTalk Bot is running!")
+    
+    # Чтобы подавить лишние логи ошибок HEAD-запросов от UptimeRobot/Render
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
 
 
 async def main():
@@ -61,24 +81,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-
-class SimpleHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"VibeTalk Bot is running!")
-
-def run_server():
-    port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
-    server.serve_forever()
-
-if __name__ == "__main__":
-    # Запускаем веб-сервер в отдельном потоке, чтобы Render видел открытый порт
+    # 1. Сначала запускаем фоновый веб-сервер, чтобы порт 10000 открылся моментально
     threading.Thread(target=run_server, daemon=True).start()
     
+    # 2. Затем запускаем самого Telegram-бота
     asyncio.run(main())
+    
