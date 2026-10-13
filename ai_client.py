@@ -208,7 +208,6 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
         ],
         "temperature": 0.95,
         "max_tokens": 500,
-        "response_format": {"type": "json_object"},
     }
 
     timeout = aiohttp.ClientTimeout(total=30)
@@ -221,24 +220,35 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
 
                     if response.status == 200 and "choices" in data:
                         raw_text = data["choices"][0]["message"]["content"].strip()
-                        print(f"[QUIZ DEBUG] Ответ API: {raw_text[:200]}")
-
-                        # Попытка извлечь JSON из ответа (иногда модель оборачивает в markdown)
-                        json_match = re.search(r'\{[\s\S]*\}', raw_text)
-                        if json_match:
-                            raw_text = json_match.group(0)
+                        print(f"[QUIZ DEBUG] Ответ API: {raw_text[:300]}")
 
                         import json
-                        result = json.loads(raw_text)
+
+                        # Способ 1: прямой парсинг
+                        try:
+                            result = json.loads(raw_text)
+                        except json.JSONDecodeError:
+                            # Способ 2: извлечь JSON из markdown-обёртки
+                            json_match = re.search(r'\{[\s\S]*\}', raw_text)
+                            if json_match:
+                                try:
+                                    result = json.loads(json_match.group(0))
+                                except json.JSONDecodeError:
+                                    # Способ 3: убрать markdown-обёртку и попробовать снова
+                                    cleaned = re.sub(r'^```json\s*|\s*```$', '', raw_text, flags=re.MULTILINE).strip()
+                                    result = json.loads(cleaned)
+                            else:
+                                raise
 
                         # Валидация структуры
                         if all(k in result for k in ("question", "options", "correct_answer", "explanation")):
                             if isinstance(result["options"], list) and len(result["options"]) == 4:
                                 if result["correct_answer"] in result["options"]:
+                                    print(f"[QUIZ DEBUG] Вопрос успешно сгенерирован!")
                                     return result
 
                         # Если структура невалидна — пробуем снова
-                        print(f"[QUIZ DEBUG] Невалидная структура: {result.keys()}")
+                        print(f"[QUIZ DEBUG] Невалидная структура: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
                         raise ValueError("Невалидная структура JSON от API")
 
                     if response.status == 429:
