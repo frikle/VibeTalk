@@ -9,7 +9,7 @@ from typing import Optional
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.groq.com/openai/v1"
-MODEL_NAME = "openai/gpt-oss-20b"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # секунды
@@ -208,6 +208,7 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
         ],
         "temperature": 0.95,
         "max_tokens": 500,
+        "response_format": {"type": "json_object"},
     }
 
     timeout = aiohttp.ClientTimeout(total=30)
@@ -220,6 +221,7 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
 
                     if response.status == 200 and "choices" in data:
                         raw_text = data["choices"][0]["message"]["content"].strip()
+                        print(f"[QUIZ DEBUG] Ответ API: {raw_text[:200]}")
 
                         # Попытка извлечь JSON из ответа (иногда модель оборачивает в markdown)
                         json_match = re.search(r'\{[\s\S]*\}', raw_text)
@@ -236,6 +238,7 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
                                     return result
 
                         # Если структура невалидна — пробуем снова
+                        print(f"[QUIZ DEBUG] Невалидная структура: {result.keys()}")
                         raise ValueError("Невалидная структура JSON от API")
 
                     if response.status == 429:
@@ -244,6 +247,7 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
                         continue
 
                     error_msg = data.get("error", {}).get("message", str(data))
+                    print(f"[QUIZ DEBUG] Ошибка API {response.status}: {error_msg}")
                     raise Exception(f"Ошибка API {response.status}: {error_msg}")
 
         except asyncio.TimeoutError:
