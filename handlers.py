@@ -839,8 +839,8 @@ def register_handlers(dp: Dispatcher):
         user = await get_user(user_id)
 
         if not user:
-            await callback.answer("Ошибка: пользователь не найден", show_alert=True)
-            return
+            await add_user(user_id)
+            user = await get_user(user_id)
 
         level = user["level"]
         excluded = await get_quiz_history(user_id)
@@ -886,8 +886,8 @@ def register_handlers(dp: Dispatcher):
         user = await get_user(user_id)
 
         if not user:
-            await callback.answer("Ошибка: пользователь не найден", show_alert=True)
-            return
+            await add_user(user_id)
+            user = await get_user(user_id)
 
         level = user["level"]
         excluded = await get_quiz_history(user_id)
