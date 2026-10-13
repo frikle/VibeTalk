@@ -12,11 +12,12 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton,
 from database import (add_user, get_user, update_user, add_word, get_words,
                       delete_word, get_word_count, get_quiz_history,
                       is_quiz_question_exists, add_quiz_question)
-from ai_client import ask_ai, API_KEY, generate_ai_quiz
+from ai_client import ask_ai, API_KEY, generate_quiz_session_question
 from keyboards import (get_main_menu_keyboard, scenarios_keyboard, travel_keyboard,
                        study_keyboard, fun_keyboard, free_keyboard, mode_keyboard,
                        level_keyboard, settings_keyboard, my_words_keyboard,
-                       quiz_answer_keyboard, quiz_again_keyboard)
+                       quiz_difficulty_keyboard, quiz_answer_keyboard,
+                       quiz_result_keyboard, quiz_final_keyboard)
 
 # Встроенный словарь для частых слов (чтобы не запрашивать ИИ каждый раз)
 BUILTIN_DICTIONARY = {
@@ -542,7 +543,8 @@ class CustomScenarioState(StatesGroup):
 
 
 class QuizState(StatesGroup):
-    """FSM для хранения правильного ответа на текущий вопрос квиза."""
+    """FSM для управления сессией квиза (10 вопросов)."""
+    waiting_for_difficulty = State()
     waiting_for_answer = State()
 
 
@@ -810,6 +812,71 @@ def get_random_scenario() -> tuple:
     return random.choice(RANDOM_SCENARIOS)
 
 
+async def _send_quiz_question(message, user_id: int, state: FSMContext, is_new_message: bool = False):
+    """Генерирует и отправляет один вопрос квиза (helper для сессии).
+
+    При is_new_message=True отправляет новое сообщение, иначе edit_text.
+    """
+    data = await state.get_data()
+    level = data.get("quiz_level", "B1")
+    question_num = data.get("question_num", 1)
+
+    excluded = await get_quiz_history(user_id)
+
+    # До 2 попыток сгенерировать уникальный вопрос
+    quiz_data = None
+    for _ in range(2):
+        try:
+            candidate = await generate_quiz_session_question(level, excluded)
+            if not await is_quiz_question_exists(user_id, candidate["question"]):
+                quiz_data = candidate
+                break
+        except Exception as e:
+            print(f"[QUIZ] Ошибка генерации: {e}")
+            continue
+
+    # Fallback: встроенный пул
+    if not quiz_data:
+        history = await get_quiz_history(user_id)
+        available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
+        if available:
+            quiz_data = random.choice(available)
+        else:
+            text = "Не удалось сгенерировать вопрос. Сбрось историю: /quiz_reset"
+            if is_new_message:
+                await message.answer(text)
+            else:
+                await message.edit_text(text)
+            return
+
+    # Сохраняем правильный ответ и объяснение в FSM
+    await state.update_data(
+        correct_answer=quiz_data["correct_answer"],
+        explanation=quiz_data.get("explanation", ""),
+        determined_level=quiz_data.get("determined_level", level)
+    )
+
+    # Записываем вопрос в историю (anti-repetition)
+    await add_quiz_question(user_id, quiz_data["question"])
+
+    question_text = (
+        f"Вопрос {question_num} / 10\n\n"
+        f"{quiz_data['question']}\n\n"
+        f"Выбери правильный ответ:"
+    )
+
+    if is_new_message:
+        await message.answer(
+            question_text,
+            reply_markup=quiz_answer_keyboard(quiz_data["options"], question_num)
+        )
+    else:
+        await message.edit_text(
+            question_text,
+            reply_markup=quiz_answer_keyboard(quiz_data["options"], question_num)
+        )
+
+
 def register_handlers(dp: Dispatcher):
     """Регистрирует все хэндлеры бота."""
 
@@ -899,61 +966,17 @@ def register_handlers(dp: Dispatcher):
             reply_markup=get_main_menu_keyboard(user['mode'], user['level'])
         )
 
+    # === КВИЗ: Сессия из 10 вопросов ===
+
     @dp.message(Command("quiz"))
     async def cmd_quiz(message: Message, state: FSMContext):
-        """Запускает квиз: генерирует уникальный вопрос и показывает варианты ответов."""
-        user_id = message.from_user.id
-        user = await get_user(user_id)
-
-        if not user:
-            await add_user(user_id)
-            user = await get_user(user_id)
-
-        level = user["level"]
-
-        # Получаем историю вопросов для исключения повторов
-        excluded = await get_quiz_history(user_id)
-
-        # До 2 попыток сгенерировать уникальный вопрос
-        quiz_data = None
-        for _ in range(2):
-            try:
-                candidate = await generate_ai_quiz(level, excluded)
-                if not await is_quiz_question_exists(user_id, candidate["question"]):
-                    quiz_data = candidate
-                    break
-            except Exception as e:
-                print(f"Ошибка генерации квиза: {e}")
-                continue
-
-        # Fallback: если AI не смог — берём вопрос из встроенного пула
-        if not quiz_data:
-            history = await get_quiz_history(user_id)
-            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
-            if available:
-                quiz_data = random.choice(available)
-            else:
-                await message.answer(
-                    "😔 Не удалось сгенерировать вопрос. "
-                    "Сбрось историю: /quiz_reset"
-                )
-                return
-
-        # Сохраняем правильный ответ и объяснение в FSM
-        await state.set_state(QuizState.waiting_for_answer)
-        await state.update_data(
-            correct_answer=quiz_data["correct_answer"],
-            explanation=quiz_data.get("explanation", "")
-        )
-
-        # Записываем вопрос в историю
-        await add_quiz_question(user_id, quiz_data["question"])
-
+        """Запускает квиз: сначала спрашивает сложность."""
+        await state.set_state(QuizState.waiting_for_difficulty)
         await message.answer(
-            f"📝 <b>Вопрос:</b>\n\n{quiz_data['question']}\n\n"
-            "Выбери правильный ответ:",
+            "📝 <b>Квиз: 10 вопросов</b>\n\n"
+            "Выбери уровень сложности:",
             parse_mode="HTML",
-            reply_markup=quiz_answer_keyboard(quiz_data["options"])
+            reply_markup=quiz_difficulty_keyboard()
         )
 
     @dp.message(Command("quiz_reset"))
@@ -961,140 +984,137 @@ def register_handlers(dp: Dispatcher):
         """Сбрасывает историю квиза пользователя."""
         user_id = message.from_user.id
         await clear_quiz_history(user_id)
-        await message.answer("🗑 История квиза очищена! Теперь вопросы могут повторяться.")
+        await message.answer("История квиза очищена! Теперь вопросы могут повторяться.")
 
-    @dp.callback_query(F.data == "quiz_start")
-    async def callback_quiz_start(callback: CallbackQuery, state: FSMContext):
-        """Запускает квиз из главного меню."""
+    @dp.callback_query(F.data.startswith("quiz_diff:"))
+    async def callback_quiz_difficulty(callback: CallbackQuery, state: FSMContext):
+        """Пользователь выбрал сложность — начинаем сессию из 10 вопросов."""
+        level = callback.data.split(":")[1]
         user_id = callback.from_user.id
-        user = await get_user(user_id)
 
+        user = await get_user(user_id)
         if not user:
             await add_user(user_id)
-            user = await get_user(user_id)
 
-        level = user["level"]
-        excluded = await get_quiz_history(user_id)
-
-        quiz_data = None
-        for _ in range(2):
-            try:
-                candidate = await generate_ai_quiz(level, excluded)
-                if not await is_quiz_question_exists(user_id, candidate["question"]):
-                    quiz_data = candidate
-                    break
-            except Exception as e:
-                print(f"Ошибка генерации квиза: {e}")
-                continue
-
-        # Fallback: если AI не смог — берём вопрос из встроенного пула
-        if not quiz_data:
-            history = await get_quiz_history(user_id)
-            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
-            if available:
-                quiz_data = random.choice(available)
-            else:
-                await callback.message.edit_text(
-                    "😔 Не удалось сгенерировать вопрос. "
-                    "Сбрось историю: /quiz_reset"
-                )
-                await callback.answer()
-                return
-
+        # Инициализируем сессию
         await state.set_state(QuizState.waiting_for_answer)
         await state.update_data(
-            correct_answer=quiz_data["correct_answer"],
-            explanation=quiz_data.get("explanation", "")
+            quiz_level=level,
+            question_num=1,
+            correct_count=0,
+            wrong_count=0
         )
-        await add_quiz_question(user_id, quiz_data["question"])
 
-        await callback.message.edit_text(
-            f"📝 <b>Вопрос:</b>\n\n{quiz_data['question']}\n\n"
-            "Выбери правильный ответ:",
-            parse_mode="HTML",
-            reply_markup=quiz_answer_keyboard(quiz_data["options"])
-        )
+        # Генерируем первый вопрос
+        await _send_quiz_question(callback.message, user_id, state, is_new_message=False)
         await callback.answer()
 
-    @dp.callback_query(F.data == "quiz_next")
-    async def callback_quiz_next(callback: CallbackQuery, state: FSMContext):
-        """Генерирует следующий вопрос квиза."""
-        user_id = callback.from_user.id
-        user = await get_user(user_id)
-
-        if not user:
-            await add_user(user_id)
-            user = await get_user(user_id)
-
-        level = user["level"]
-        excluded = await get_quiz_history(user_id)
-
-        quiz_data = None
-        for _ in range(2):
-            try:
-                candidate = await generate_ai_quiz(level, excluded)
-                if not await is_quiz_question_exists(user_id, candidate["question"]):
-                    quiz_data = candidate
-                    break
-            except Exception as e:
-                print(f"Ошибка генерации квиза: {e}")
-                continue
-
-        # Fallback: если AI не смог — берём вопрос из встроенного пула
-        if not quiz_data:
-            history = await get_quiz_history(user_id)
-            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
-            if available:
-                quiz_data = random.choice(available)
-            else:
-                await callback.message.edit_text(
-                    "😔 Не удалось сгенерировать вопрос. "
-                    "Сбрось историю: /quiz_reset"
-                )
-                await callback.answer()
-                return
-
-        await state.set_state(QuizState.waiting_for_answer)
-        await state.update_data(
-            correct_answer=quiz_data["correct_answer"],
-            explanation=quiz_data.get("explanation", "")
-        )
-        await add_quiz_question(user_id, quiz_data["question"])
-
+    @dp.callback_query(F.data == "quiz_restart")
+    async def callback_quiz_restart(callback: CallbackQuery, state: FSMContext):
+        """Перезапуск квиза — снова спрашиваем сложность."""
+        await state.set_state(QuizState.waiting_for_difficulty)
         await callback.message.edit_text(
-            f"📝 <b>Вопрос:</b>\n\n{quiz_data['question']}\n\n"
-            "Выбери правильный ответ:",
+            "📝 <b>Квиз: 10 вопросов</b>\n\n"
+            "Выбери уровень сложности:",
             parse_mode="HTML",
-            reply_markup=quiz_answer_keyboard(quiz_data["options"])
+            reply_markup=quiz_difficulty_keyboard()
         )
         await callback.answer()
 
     @dp.callback_query(F.data.startswith("quiz_ans:"))
     async def callback_quiz_answer(callback: CallbackQuery, state: FSMContext):
-        """Обрабатывает ответ пользователя на вопрос квиза."""
-        user_answer = callback.data.split(":", 1)[1]
+        """Обрабатывает ответ пользователя и показывает результат."""
+        _, question_num_str, user_answer = callback.data.split(":", 2)
+        question_num = int(question_num_str)
         data = await state.get_data()
         correct_answer = data.get("correct_answer", "")
+        explanation = data.get("explanation", "")
+        correct_count = data.get("correct_count", 0)
+        wrong_count = data.get("wrong_count", 0)
+
+        # Подсчёт очков
+        if user_answer == correct_answer:
+            correct_count += 1
+            result_text = "Правильно! Молодец!"
+        else:
+            wrong_count += 1
+            result_text = "Неверно!"
+
+        # Обновляем счёт в FSM
+        await state.update_data(correct_count=correct_count, wrong_count=wrong_count)
+
+        is_last = question_num >= 10
+
+        if is_last:
+            # Финальный экран
+            total = correct_count + wrong_count
+            score_pct = (correct_count / total * 100) if total > 0 else 0
+
+            if score_pct >= 90:
+                feedback = "Великолепно! Ты почти идеален!"
+            elif score_pct >= 70:
+                feedback = "Очень хорошо! Продолжай в том же духе!"
+            elif score_pct >= 50:
+                feedback = "Неплохо, но есть куда расти."
+            else:
+                feedback = "Не сдавайся! Попробуй ещё раз с более простым уровнем."
+
+            await state.clear()
+            await callback.message.edit_text(
+                f"Квиз завершён!\n\n"
+                f"Правильные ответы: {correct_count} / {total}\n"
+                f"Ошибки: {wrong_count}\n\n"
+                f"{feedback}",
+                reply_markup=quiz_final_keyboard()
+            )
+        else:
+            # Показываем результат и кнопку «Следующий вопрос»
+            emoji = "✅" if user_answer == correct_answer else "❌"
+            await callback.message.edit_text(
+                f"{emoji} {result_text}\n\n"
+                f"Твой ответ: {user_answer}\n"
+                f"Правильный ответ: {correct_answer}\n\n"
+                f"Объяснение: {explanation}\n\n"
+                f"Вопрос {question_num} из 10. Счёт: {correct_count} верно, {wrong_count} ошибок.",
+                reply_markup=quiz_result_keyboard()
+            )
+
+        await callback.answer()
+
+    @dp.callback_query(F.data == "quiz_next")
+    async def callback_quiz_next(callback: CallbackQuery, state: FSMContext):
+        """Генерирует следующий вопрос в сессии."""
+        data = await state.get_data()
+        question_num = data.get("question_num", 0) + 1
+
+        if question_num > 10:
+            # На всякий случай — если что-то пошло не так
+            await state.clear()
+            await callback.message.edit_text(
+                "Квиз завершён! Спасибо за участие!",
+                reply_markup=quiz_final_keyboard()
+            )
+            await callback.answer()
+            return
+
+        await state.update_data(question_num=question_num)
+        await _send_quiz_question(callback.message, callback.from_user.id, state, is_new_message=False)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "quiz_end")
+    async def callback_quiz_end(callback: CallbackQuery, state: FSMContext):
+        """Досрочное завершение квиза — показываем итог."""
+        data = await state.get_data()
+        correct_count = data.get("correct_count", 0)
+        wrong_count = data.get("wrong_count", 0)
+        total = correct_count + wrong_count
 
         await state.clear()
-
-        if user_answer == correct_answer:
-            result_emoji = "✅"
-            result_text = "<b>Правильно!</b> Молодец! 🎉"
-        else:
-            result_emoji = "❌"
-            result_text = "<b>Неверно!</b>"
-
-        # Получаем explanation из данных FSM (если сохранили) или используем стандартный текст
-        explanation = data.get("explanation", "Обрати внимание на правильный ответ и запомни правило.")
-
         await callback.message.edit_text(
-            f"{result_emoji} {result_text}\n\n"
-            f"Твой ответ: <b>{user_answer}</b>\n"
-            f"Правильный ответ: <b>{correct_answer}</b>\n\n"
-            f"💡 <b>Объяснение:</b>\n{explanation}",
-            parse_mode="HTML",
-            reply_markup=quiz_again_keyboard()
+            f"Квиз досрочно завершён!\n\n"
+            f"Правильные ответы: {correct_count} / {total}\n"
+            f"Ошибки: {wrong_count}",
+            reply_markup=quiz_final_keyboard()
         )
         await callback.answer()
 

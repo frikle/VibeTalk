@@ -111,19 +111,39 @@ def my_words_keyboard(words: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def quiz_answer_keyboard(options: list) -> InlineKeyboardMarkup:
+def quiz_difficulty_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора сложности квиза."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="A1 — Начальный", callback_data="quiz_diff:A1")],
+        [InlineKeyboardButton(text="A2 — Начальный+", callback_data="quiz_diff:A2")],
+        [InlineKeyboardButton(text="B1 — Средний", callback_data="quiz_diff:B1")],
+        [InlineKeyboardButton(text="B2 — Средний+", callback_data="quiz_diff:B2")],
+        [InlineKeyboardButton(text="C1 — Продвинутый", callback_data="quiz_diff:C1")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="back")],
+    ])
+
+
+def quiz_answer_keyboard(options: list, question_num: int) -> InlineKeyboardMarkup:
     """Клавиатура для ответа на вопрос квиза (одна колонка, callback_data = quiz_ans:<текст ответа>)."""
     keyboard = []
     for option in options:
         keyboard.append([
-            InlineKeyboardButton(text=option, callback_data=f"quiz_ans:{option}")
+            InlineKeyboardButton(text=option, callback_data=f"quiz_ans:{question_num}:{option}")
         ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def quiz_again_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура «Ещё вопрос» после ответа."""
+def quiz_result_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура после ответа: следующий вопрос или завершить."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Следующий вопрос", callback_data="quiz_next")],
+        [InlineKeyboardButton(text="➡️ Следующий вопрос", callback_data="quiz_next")],
+        [InlineKeyboardButton(text="🔙 Завершить", callback_data="quiz_end")],
+    ])
+
+
+def quiz_final_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура финального экрана квиза."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Пройти ещё раз", callback_data="quiz_restart")],
         [InlineKeyboardButton(text="🔙 В меню", callback_data="back")],
     ])

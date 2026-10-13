@@ -143,55 +143,56 @@ async def ask_ai(user_message: str, mode: str, level: str, scenario: str,
     raise Exception("Groq API недоступен после нескольких попыток")
 
 
-async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
-    """Генерирует уникальный вопрос для квиза через Groq API.
+async def generate_quiz_session_question(target_level: str, excluded_topics: list) -> dict:
+    """Генерирует один вопрос для сессии квиза через Groq API.
+
+    Модель сама оценивает истинную сложность вопроса (determined_level)
+    и возвращает строго валидный JSON.
 
     Args:
-        level: Уровень языка (A1, A2, B1, B2, C1).
-        excluded_topics: Список вопросов, которые уже задавались пользователю.
+        target_level: Целевой уровень (A1, A2, B1, B2, C1).
+        excluded_topics: Список вопросов, которые уже задавались.
 
     Returns:
-        dict с ключами: question, options (4 строки), correct_answer, explanation.
+        dict: determined_level, question, options, correct_answer, explanation.
     """
     excluded_text = ""
     if excluded_topics:
         excluded_list = "\n".join(f"- {q}" for q in excluded_topics)
         excluded_text = (
-            f"\n\nВАЖНО: НЕ повторяй следующие вопросы, которые уже задавались:\n{excluded_list}\n"
+            f"\n\nВАЖНО: НЕ повторяй следующие вопросы:\n{excluded_list}\n"
             "Придумай совершенно новый вопрос!"
         )
 
-    level_desc = {
-        "A1": "начальный (элементарные фразы, простые слова)",
-        "A2": "начальный (простые бытовые ситуации)",
-        "B1": "средний (уверенное общение, основная грамматика)",
-        "B2": "выше среднего (сложные конструкции, нюансированная речь)",
-        "C1": "продвинутый (свободная естественная речь, идиомы)",
-    }
-    level_text = level_desc.get(level, "средний")
-
     system_prompt = (
-        "Ты — генератор вопросов для теста английского языка.\n"
-        "Твоя задача — создать ОДИН уникальный вопрос на английском языке.\n\n"
-        f"Уровень языка: {level} — {level_text}\n\n"
+        "Ты — опытный ESL-преподаватель (English as a Second Language). "
+        "Твоя задача — создать ОДИН вопрос с множественным выбором (multiple choice) "
+        "для проверки знаний английского языка.\n\n"
+        f"Целевой уровень студента: {target_level}\n\n"
+        "ОЦЕНИ САМ: после формулировки вопроса ОБЯЗАТЕЛЬНО определи его ИСТИННУЮ сложность "
+        "и запиши в поле determined_level (одно из: A1, A2, B1, B2, C1). "
+        "Если вопрос слишком простой или сложный для target_level — скорректируй его.\n\n"
         "Формат ответа — СТРОГО валидный JSON, без markdown-обёрток, без лишнего текста:\n"
         "{\n"
+        '  "determined_level": "B1",\n'
         '  "question": "текст вопроса на английском",\n'
         '  "options": ["вариант1", "вариант2", "вариант3", "вариант4"],\n'
         '  "correct_answer": "один из вариантов ТОЧНО как в options",\n'
-        '  "explanation": "объяснение на русском языке, почему ответ правильный"\n'
+        '  "explanation": "объяснение на русском языке"\n'
         "}\n\n"
         "ПРАВИЛА:\n"
-        "- question — это либо предложение с пропуском (____), либо вопрос-выбор правильного варианта.\n"
-        "- options — ровно 4 варианта ответа.\n"
+        "- question — предложение с пропуском (____) или вопрос-выбор правильного варианта.\n"
+        "- options — ровно 4 варианта, все грамматически возможны, но только 1 правильный.\n"
         "- correct_answer — ДОЛЖЕН точно совпадать с одним из элементов options.\n"
-        "- explanation — объяснение ГРАММАТИЧЕСКОГО ПРАВИЛА или ЛЕКСИЧЕСКОГО значения на русском.\n"
-        "- Вопросы должны быть на ГРАММАТИКУ, ЛЕКСИКУ или УПОТРЕБЛЕНИЕ.\n"
-        "- Не используй слишком сложные слова для начальных уровней.\n"
+        "- explanation — краткое объяснение на русском (грамматическое правило или лексическое значение).\n"
+        "- Вопросы на ГРАММАТИКУ, ЛЕКСИКУ или УПОТРЕБЛЕНИЕ.\n"
+        "- Для A1-A2: простые слова, Present Simple, Past Simple.\n"
+        "- Для B1-B2: Present Perfect, Conditionals, Passive Voice.\n"
+        "- Для C1: идиомы, сложные конструкции, нюансированная лексика.\n"
         f"{excluded_text}"
     )
 
-    user_message = f"Создай один уникальный вопрос для уровня {level}."
+    user_message = f"Создай один вопрос для уровня {target_level}."
 
     url = f"{API_BASE_URL}/chat/completions"
 
@@ -206,11 +207,11 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
-        "temperature": 0.85,
-        "max_tokens": 300,
+        "temperature": 0.95,
+        "max_tokens": 400,
     }
 
-    timeout = aiohttp.ClientTimeout(total=20)
+    timeout = aiohttp.ClientTimeout(total=25)
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -234,21 +235,22 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
                                 try:
                                     result = json.loads(json_match.group(0))
                                 except json.JSONDecodeError:
-                                    # Способ 3: убрать markdown-обёртку и попробовать снова
+                                    # Способ 3: убрать markdown-обёртку
                                     cleaned = re.sub(r'^```json\s*|\s*```$', '', raw_text, flags=re.MULTILINE).strip()
                                     result = json.loads(cleaned)
                             else:
                                 raise
 
                         # Валидация структуры
-                        if all(k in result for k in ("question", "options", "correct_answer", "explanation")):
+                        required_keys = ("determined_level", "question", "options", "correct_answer", "explanation")
+                        if all(k in result for k in required_keys):
                             if isinstance(result["options"], list) and len(result["options"]) == 4:
                                 if result["correct_answer"] in result["options"]:
-                                    print(f"[QUIZ DEBUG] Вопрос успешно сгенерирован!")
-                                    return result
+                                    if result["determined_level"] in ("A1", "A2", "B1", "B2", "C1"):
+                                        print(f"[QUIZ DEBUG] Вопрос сгенерирован! Уровень: {result['determined_level']}")
+                                        return result
 
-                        # Если структура невалидна — пробуем снова
-                        print(f"[QUIZ DEBUG] Невалидная структура: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
+                        print(f"[QUIZ DEBUG] Невалидная структура: {list(result.keys()) if isinstance(result, dict) else type(result)}")
                         raise ValueError("Невалидная структура JSON от API")
 
                     if response.status == 429:
@@ -261,18 +263,18 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
                     raise Exception(f"Ошибка API {response.status}: {error_msg}")
 
         except asyncio.TimeoutError:
-            print(f"Таймаут генерации квиза, попытка {attempt + 1}/{MAX_RETRIES}")
+            print(f"Таймаут квиза, попытка {attempt + 1}/{MAX_RETRIES}")
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
                 continue
             raise Exception("Groq API не отвечает (таймаут)")
 
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"Ошибка парсинг JSON квиза: {e}, попытка {attempt + 1}/{MAX_RETRIES}")
+            print(f"Ошибка парсинга JSON: {e}, попытка {attempt + 1}/{MAX_RETRIES}")
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(RETRY_DELAY)
                 continue
-            raise Exception(f"Не удалось сгенерировать корректный вопрос: {e}")
+            raise Exception(f"Не удалось сгенерировать вопрос: {e}")
 
         except Exception as e:
             if "429" in str(e) and attempt < MAX_RETRIES - 1:
