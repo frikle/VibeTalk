@@ -667,6 +667,131 @@ SCENARIOS = {
     "slang": "💬 Сленг и идиомы — разговор о современном сленге и выражениях",
 }
 
+# === FALLBACK: Встроенные вопросы для квиза (если AI не смог сгенерировать) ===
+
+QUIZ_FALLBACK_QUESTIONS = [
+    {
+        "question": "She ____ to school every day.",
+        "options": ["go", "goes", "going", "gone"],
+        "correct_answer": "goes",
+        "explanation": "В Present Simple с 3-м лицом ед. ч. (he, she, it) глагол получает окончание -s: goes."
+    },
+    {
+        "question": "I ____ this movie last week.",
+        "options": ["see", "saw", "seen", "seeing"],
+        "correct_answer": "saw",
+        "explanation": "Past Simple от глагола see — saw. Last week указывает на прошедшее время."
+    },
+    {
+        "question": "There ____ many people at the party.",
+        "options": ["was", "were", "is", "be"],
+        "correct_answer": "were",
+        "explanation": "Many people — множественное число, поэтому were."
+    },
+    {
+        "question": "He is ____ than his brother.",
+        "options": ["tall", "taller", "tallest", "more tall"],
+        "correct_answer": "taller",
+        "explanation": "Сравнительная степень прилагательного tall — taller."
+    },
+    {
+        "question": "We have lived here ____ 2015.",
+        "options": ["for", "since", "from", "at"],
+        "correct_answer": "since",
+        "explanation": "Since используется с точкой во времени (since 2015). For — с периодом (for 10 years)."
+    },
+    {
+        "question": "If it rains, we ____ at home.",
+        "options": ["stay", "stayed", "will stay", "would stay"],
+        "correct_answer": "will stay",
+        "explanation": "First Conditional: if + Present Simple, will + инфинитив."
+    },
+    {
+        "question": "She has ____ finished her homework.",
+        "options": ["yet", "already", "still", "since"],
+        "correct_answer": "already",
+        "explanation": "Already используется в Present Perfect для указания, что действие уже завершено."
+    },
+    {
+        "question": "This book ____ by Orwell.",
+        "options": ["wrote", "written", "was written", "is wrote"],
+        "correct_answer": "was written",
+        "explanation": "Пассивный залог в Past Simple: was/were + V3. Write → wrote → written."
+    },
+    {
+        "question": "I'm looking forward ____ you.",
+        "options": ["to see", "seeing", "see", "to seeing"],
+        "correct_answer": "to seeing",
+        "explanation": "Look forward to + герундий (V-ing). Предлог to здесь не инфинитивный."
+    },
+    {
+        "question": "He asked me ____ I was busy.",
+        "options": ["that", "if", "what", "about"],
+        "correct_answer": "if",
+        "explanation": "В косвенном вопросе без вопросительного слова используется if/whether."
+    },
+    {
+        "question": "The meeting is ____ Monday.",
+        "options": ["in", "on", "at", "by"],
+        "correct_answer": "on",
+        "explanation": "Предлог on используется с днями недели: on Monday."
+    },
+    {
+        "question": "I've been studying English ____ three years.",
+        "options": ["since", "for", "from", "during"],
+        "correct_answer": "for",
+        "explanation": "For используется с периодом времени (three years). Since — с точкой (since 2023)."
+    },
+    {
+        "question": "____ you ever been to London?",
+        "options": ["Did", "Do", "Have", "Are"],
+        "correct_answer": "Have",
+        "explanation": "Present Perfect образуется с have/has + V3. Ever — маркер Present Perfect."
+    },
+    {
+        "question": "She's been working here ____ 2020.",
+        "options": ["for", "since", "from", "by"],
+        "correct_answer": "since",
+        "explanation": "Since + точка во времени (since 2020). For + период (for 4 years)."
+    },
+    {
+        "question": "The ____ of the building is impressive.",
+        "options": ["high", "height", "higher", "highest"],
+        "correct_answer": "height",
+        "explanation": "Существительное height (высота), не прилагательное high."
+    },
+    {
+        "question": "I'd rather ____ at home tonight.",
+        "options": ["to stay", "stay", "staying", "stayed"],
+        "correct_answer": "stay",
+        "explanation": "I'd rather + инфинитив без to (bare infinitive)."
+    },
+    {
+        "question": "Neither my friends ____ I like coffee.",
+        "options": ["or", "nor", "and", "but"],
+        "correct_answer": "nor",
+        "explanation": "Пара neither... nor... (ни... ни...)."
+    },
+    {
+        "question": "He drove ____ the city center.",
+        "options": ["through", "across", "cross", "over"],
+        "correct_answer": "through",
+        "explanation": "Through — сквозь/через что-то трёхмерное (through the city)."
+    },
+    {
+        "question": "She apologized ____ late.",
+        "options": ["to be", "for being", "being", "be"],
+        "correct_answer": "for being",
+        "explanation": "Apologize for + герундий (V-ing)."
+    },
+    {
+        "question": "By next year, I ____ my degree.",
+        "options": ["will finish", "will have finished", "finish", "have finished"],
+        "correct_answer": "will have finished",
+        "explanation": "Future Perfect: will have + V3. By next year — маркер Future Perfect."
+    },
+]
+
 RANDOM_SCENARIOS = [
     ("Вы — турист, который заблудился в незнакомом городе. ИИ — местный житель, который помогает найти дорогу.", "🚶 Заблудившийся турист"),
     ("Вы — покупатель в магазине гитар. ИИ — продавец-консультант, который помогает выбрать инструмент.", "🎸 Покупка гитары"),
@@ -801,12 +926,18 @@ def register_handlers(dp: Dispatcher):
                 print(f"Ошибка генерации квиза: {e}")
                 continue
 
+        # Fallback: если AI не смог — берём вопрос из встроенного пула
         if not quiz_data:
-            await message.answer(
-                "😔 Не удалось сгенерировать уникальный вопрос. "
-                "Попробуй ещё раз позже или сбрось историю: /quiz_reset"
-            )
-            return
+            history = await get_quiz_history(user_id)
+            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
+            if available:
+                quiz_data = random.choice(available)
+            else:
+                await message.answer(
+                    "😔 Не удалось сгенерировать вопрос. "
+                    "Сбрось историю: /quiz_reset"
+                )
+                return
 
         # Сохраняем правильный ответ и объяснение в FSM
         await state.set_state(QuizState.waiting_for_answer)
@@ -856,13 +987,19 @@ def register_handlers(dp: Dispatcher):
                 print(f"Ошибка генерации квиза: {e}")
                 continue
 
+        # Fallback: если AI не смог — берём вопрос из встроенного пула
         if not quiz_data:
-            await callback.message.edit_text(
-                "😔 Не удалось сгенерировать уникальный вопрос. "
-                "Попробуй ещё раз позже или сбрось историю: /quiz_reset"
-            )
-            await callback.answer()
-            return
+            history = await get_quiz_history(user_id)
+            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
+            if available:
+                quiz_data = random.choice(available)
+            else:
+                await callback.message.edit_text(
+                    "😔 Не удалось сгенерировать вопрос. "
+                    "Сбрось историю: /quiz_reset"
+                )
+                await callback.answer()
+                return
 
         await state.set_state(QuizState.waiting_for_answer)
         await state.update_data(
@@ -903,13 +1040,19 @@ def register_handlers(dp: Dispatcher):
                 print(f"Ошибка генерации квиза: {e}")
                 continue
 
+        # Fallback: если AI не смог — берём вопрос из встроенного пула
         if not quiz_data:
-            await callback.message.edit_text(
-                "😔 Не удалось сгенерировать уникальный вопрос. "
-                "Попробуй ещё раз позже или сбрось историю: /quiz_reset"
-            )
-            await callback.answer()
-            return
+            history = await get_quiz_history(user_id)
+            available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
+            if available:
+                quiz_data = random.choice(available)
+            else:
+                await callback.message.edit_text(
+                    "😔 Не удалось сгенерировать вопрос. "
+                    "Сбрось историю: /quiz_reset"
+                )
+                await callback.answer()
+                return
 
         await state.set_state(QuizState.waiting_for_answer)
         await state.update_data(
