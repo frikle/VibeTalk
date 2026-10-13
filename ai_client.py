@@ -168,10 +168,20 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         "A1": "Present Simple, Past Simple, Present Continuous. Простые слова (house, food, family). Короткие предложения.",
         "A2": "Present Perfect, Future Simple, модальные глаголы (can, must). Бытовая лексика. Простые связки.",
         "B1": "Present Perfect vs Past Simple, Passive Voice (present/past), Conditionals 0/1/2, относительные придаточные (who/which/that), герундий vs инфинитив. Средняя длина предложений.",
-        "B2": "Conditionals 2/3, Perfect tenses (Past Perfect, Future Perfect), сложный Passive, инверсия, субъунктив (I wish / If I were), сложные связки (despite, whereas), нюансированная лексика.",
-        "C1": "Сложные идиомы, инверсия (Never had I...), эллипсис, параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive), регистр и стилистика, subtle grammar distinctions.",
+        "B2": "Conditionals 2/3, Past Perfect, Future Perfect, инверсия (Not only...but also), субъунктив (I wish / If I were), сложные связки (despite, whereas, albeit), нюансированная лексика, difference between similar words (affect/effect, lie/lay). Вопросы должны содержать 2+ грамматических аспекта.",
+        "C1": "ТОЛЬКО продвинутые темы: эллипсис, инверсия (Never had I... / Scarcely had...), параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive, meticulous), регистр и стилистика, subtle grammar distinctions (present perfect vs past perfect in complex contexts), идиомы и фразовые глаголы с оттенками значения, сложные conditional structures (mixed conditionals). Вопросы должны содержать 3+ грамматических аспекта и неочевидные варианты ответов. НЕ используй простые конструкции типа neither...nor, not only...but also — это B1 уровень.",
     }
     level_req = level_requirements.get(target_level, level_requirements["B1"])
+
+    easy_patterns_warning = ""
+    if target_level in ("B2", "C1"):
+        easy_patterns_warning = (
+            f"\n\nВАЖНО: Для уровня {target_level} ЗАПРЕЩЕНО использовать простые конструкции типа:\n"
+            "- neither...nor, not only...but also (это B1)\n"
+            "- простые вопросы с одним пропуском и очевидным ответом\n"
+            "- базовую лексику (house, food, family, go, see)\n"
+            "Вопросы должны быть СЛОЖНЫМИ и содержать неочевидные варианты ответов."
+        )
 
     system_prompt = (
         "Ты — опытный ESL-преподаватель (English as a Second Language). "
@@ -197,6 +207,7 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         "- explanation — краткое объяснение на русском (грамматическое правило или лексическое значение).\n"
         "- Вопросы на ГРАММАТИКУ, ЛЕКСИКУ или УПОТРЕБЛЕНИЕ.\n"
         "- НЕ задавай примитивные вопросы типа 'She ___ to school' для уровней B1 и выше.\n"
+        f"{easy_patterns_warning}\n"
         f"{excluded_text}"
     )
 
