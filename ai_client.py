@@ -9,7 +9,7 @@ from typing import Optional
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.groq.com/openai/v1"
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "openai/gpt-oss-20b"
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # секунды
