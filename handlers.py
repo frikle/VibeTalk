@@ -968,6 +968,17 @@ def register_handlers(dp: Dispatcher):
 
     # === КВИЗ: Сессия из 10 вопросов ===
 
+    @dp.callback_query(F.data == "quiz_start")
+    async def callback_quiz_start(callback: CallbackQuery, state: FSMContext):
+        """Запускает квиз из главного меню — показывает выбор сложности."""
+        await state.set_state(QuizState.waiting_for_difficulty)
+        await callback.message.edit_text(
+            "Квиз: 10 вопросов\n\n"
+            "Выбери уровень сложности:",
+            reply_markup=quiz_difficulty_keyboard()
+        )
+        await callback.answer()
+
     @dp.message(Command("quiz"))
     async def cmd_quiz(message: Message, state: FSMContext):
         """Запускает квиз: сначала спрашивает сложность."""
