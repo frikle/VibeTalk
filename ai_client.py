@@ -11,8 +11,8 @@ API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.groq.com/openai/v1"
 MODEL_NAME = "openai/gpt-oss-20b"
 
-MAX_RETRIES = 3
-RETRY_DELAY = 2  # секунды
+MAX_RETRIES = 2
+RETRY_DELAY = 1  # секунды
 
 
 def clean_text(text: str) -> str:
@@ -206,11 +206,11 @@ async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
-        "temperature": 0.95,
-        "max_tokens": 500,
+        "temperature": 0.85,
+        "max_tokens": 300,
     }
 
-    timeout = aiohttp.ClientTimeout(total=30)
+    timeout = aiohttp.ClientTimeout(total=20)
 
     for attempt in range(MAX_RETRIES):
         try:

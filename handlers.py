@@ -789,9 +789,9 @@ def register_handlers(dp: Dispatcher):
         # Получаем историю вопросов для исключения повторов
         excluded = await get_quiz_history(user_id)
 
-        # До 3 попыток сгенерировать уникальный вопрос
+        # До 2 попыток сгенерировать уникальный вопрос
         quiz_data = None
-        for _ in range(3):
+        for _ in range(2):
             try:
                 candidate = await generate_ai_quiz(level, excluded)
                 if not await is_quiz_question_exists(user_id, candidate["question"]):
@@ -846,7 +846,7 @@ def register_handlers(dp: Dispatcher):
         excluded = await get_quiz_history(user_id)
 
         quiz_data = None
-        for _ in range(3):
+        for _ in range(2):
             try:
                 candidate = await generate_ai_quiz(level, excluded)
                 if not await is_quiz_question_exists(user_id, candidate["question"]):
@@ -893,7 +893,7 @@ def register_handlers(dp: Dispatcher):
         excluded = await get_quiz_history(user_id)
 
         quiz_data = None
-        for _ in range(3):
+        for _ in range(2):
             try:
                 candidate = await generate_ai_quiz(level, excluded)
                 if not await is_quiz_question_exists(user_id, candidate["question"]):
