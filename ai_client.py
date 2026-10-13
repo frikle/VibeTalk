@@ -11,7 +11,7 @@ API_KEY = os.getenv("API_KEY")
 API_BASE_URL = "https://api.groq.com/openai/v1"
 MODEL_NAME = "openai/gpt-oss-20b"
 
-MAX_RETRIES = 2
+MAX_RETRIES = 1
 RETRY_DELAY = 1  # секунды
 
 
@@ -164,11 +164,21 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
             "Придумай совершенно новый вопрос!"
         )
 
+    level_requirements = {
+        "A1": "Present Simple, Past Simple, Present Continuous. Простые слова (house, food, family). Короткие предложения.",
+        "A2": "Present Perfect, Future Simple, модальные глаголы (can, must). Бытовая лексика. Простые связки.",
+        "B1": "Present Perfect vs Past Simple, Passive Voice (present/past), Conditionals 0/1/2, относительные придаточные (who/which/that), герундий vs инфинитив. Средняя длина предложений.",
+        "B2": "Conditionals 2/3, Perfect tenses (Past Perfect, Future Perfect), сложный Passive, инверсия, субъунктив (I wish / If I were), сложные связки (despite, whereas), нюансированная лексика.",
+        "C1": "Сложные идиомы, инверсия (Never had I...), эллипсис, параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive), регистр и стилистика, subtle grammar distinctions.",
+    }
+    level_req = level_requirements.get(target_level, level_requirements["B1"])
+
     system_prompt = (
         "Ты — опытный ESL-преподаватель (English as a Second Language). "
         "Твоя задача — создать ОДИН вопрос с множественным выбором (multiple choice) "
         "для проверки знаний английского языка.\n\n"
         f"Целевой уровень студента: {target_level}\n\n"
+        f"ТРЕБОВАНИЯ К УРОВНЮ {target_level}:\n{level_req}\n\n"
         "ОЦЕНИ САМ: после формулировки вопроса ОБЯЗАТЕЛЬНО определи его ИСТИННУЮ сложность "
         "и запиши в поле determined_level (одно из: A1, A2, B1, B2, C1). "
         "Если вопрос слишком простой или сложный для target_level — скорректируй его.\n\n"
@@ -186,9 +196,7 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         "- correct_answer — ДОЛЖЕН точно совпадать с одним из элементов options.\n"
         "- explanation — краткое объяснение на русском (грамматическое правило или лексическое значение).\n"
         "- Вопросы на ГРАММАТИКУ, ЛЕКСИКУ или УПОТРЕБЛЕНИЕ.\n"
-        "- Для A1-A2: простые слова, Present Simple, Past Simple.\n"
-        "- Для B1-B2: Present Perfect, Conditionals, Passive Voice.\n"
-        "- Для C1: идиомы, сложные конструкции, нюансированная лексика.\n"
+        "- НЕ задавай примитивные вопросы типа 'She ___ to school' для уровней B1 и выше.\n"
         f"{excluded_text}"
     )
 
@@ -208,10 +216,10 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
             {"role": "user", "content": user_message},
         ],
         "temperature": 0.95,
-        "max_tokens": 400,
+        "max_tokens": 250,
     }
 
-    timeout = aiohttp.ClientTimeout(total=25)
+    timeout = aiohttp.ClientTimeout(total=15)
 
     for attempt in range(MAX_RETRIES):
         try:
