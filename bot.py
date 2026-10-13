@@ -53,6 +53,8 @@ async def main():
         BotCommand(command="mode", description="👨‍🏫 Сменить режим (Учитель / Друг)"),
         BotCommand(command="level", description="📊 Изменить уровень английского"),
         BotCommand(command="topics", description="📚 Выбрать тему диалога"),
+        BotCommand(command="quiz", description="📝 Квиз (проверь свои знания)"),
+        BotCommand(command="quiz_reset", description="🗑 Сбросить историю квиза"),
         BotCommand(command="random", description="🎲 Случайный сценарий"),
         BotCommand(command="custom", description="✍️ Свой сценарий"),
         BotCommand(command="words", description="📖 Словарик (мои слова)"),

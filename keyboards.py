@@ -11,6 +11,7 @@ def get_main_menu_keyboard(current_mode: str, current_level: str) -> InlineKeybo
         [InlineKeyboardButton(text=mode_text, callback_data="set:mode")],
         [InlineKeyboardButton(text=level_text, callback_data="set:level")],
         [InlineKeyboardButton(text="🎭 Выбор темы диалога", callback_data="menu:scenarios")],
+        [InlineKeyboardButton(text="📝 Квиз (проверь себя)", callback_data="quiz_start")],
         [InlineKeyboardButton(text="🎲 Случайный сценарий", callback_data="random")],
         [InlineKeyboardButton(text="✍️ Свой сценарий", callback_data="custom")],
         [InlineKeyboardButton(text="📚 Словарик (мои слова)", callback_data="my_words")],
@@ -108,3 +109,21 @@ def my_words_keyboard(words: list) -> InlineKeyboardMarkup:
         ])
     keyboard.append([InlineKeyboardButton(text="🔙 Назад в меню", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def quiz_answer_keyboard(options: list) -> InlineKeyboardMarkup:
+    """Клавиатура для ответа на вопрос квиза (одна колонка, callback_data = quiz_ans:<текст ответа>)."""
+    keyboard = []
+    for option in options:
+        keyboard.append([
+            InlineKeyboardButton(text=option, callback_data=f"quiz_ans:{option}")
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def quiz_again_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура «Ещё вопрос» после ответа."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Следующий вопрос", callback_data="quiz_next")],
+        [InlineKeyboardButton(text="🔙 В меню", callback_data="back")],
+    ])

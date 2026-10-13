@@ -141,3 +141,129 @@ async def ask_ai(user_message: str, mode: str, level: str, scenario: str,
             raise
 
     raise Exception("Groq API недоступен после нескольких попыток")
+
+
+async def generate_ai_quiz(level: str, excluded_topics: list) -> dict:
+    """Генерирует уникальный вопрос для квиза через Groq API.
+
+    Args:
+        level: Уровень языка (A1, A2, B1, B2, C1).
+        excluded_topics: Список вопросов, которые уже задавались пользователю.
+
+    Returns:
+        dict с ключами: question, options (4 строки), correct_answer, explanation.
+    """
+    excluded_text = ""
+    if excluded_topics:
+        excluded_list = "\n".join(f"- {q}" for q in excluded_topics)
+        excluded_text = (
+            f"\n\nВАЖНО: НЕ повторяй следующие вопросы, которые уже задавались:\n{excluded_list}\n"
+            "Придумай совершенно новый вопрос!"
+        )
+
+    level_desc = {
+        "A1": "начальный (элементарные фразы, простые слова)",
+        "A2": "начальный (простые бытовые ситуации)",
+        "B1": "средний (уверенное общение, основная грамматика)",
+        "B2": "выше среднего (сложные конструкции, нюансированная речь)",
+        "C1": "продвинутый (свободная естественная речь, идиомы)",
+    }
+    level_text = level_desc.get(level, "средний")
+
+    system_prompt = (
+        "Ты — генератор вопросов для теста английского языка.\n"
+        "Твоя задача — создать ОДИН уникальный вопрос на английском языке.\n\n"
+        f"Уровень языка: {level} — {level_text}\n\n"
+        "Формат ответа — СТРОГО валидный JSON, без markdown-обёрток, без лишнего текста:\n"
+        "{\n"
+        '  "question": "текст вопроса на английском",\n'
+        '  "options": ["вариант1", "вариант2", "вариант3", "вариант4"],\n'
+        '  "correct_answer": "один из вариантов ТОЧНО как в options",\n'
+        '  "explanation": "объяснение на русском языке, почему ответ правильный"\n'
+        "}\n\n"
+        "ПРАВИЛА:\n"
+        "- question — это либо предложение с пропуском (____), либо вопрос-выбор правильного варианта.\n"
+        "- options — ровно 4 варианта ответа.\n"
+        "- correct_answer — ДОЛЖЕН точно совпадать с одним из элементов options.\n"
+        "- explanation — объяснение ГРАММАТИЧЕСКОГО ПРАВИЛА или ЛЕКСИЧЕСКОГО значения на русском.\n"
+        "- Вопросы должны быть на ГРАММАТИКУ, ЛЕКСИКУ или УПОТРЕБЛЕНИЕ.\n"
+        "- Не используй слишком сложные слова для начальных уровней.\n"
+        f"{excluded_text}"
+    )
+
+    user_message = f"Создай один уникальный вопрос для уровня {level}."
+
+    url = f"{API_BASE_URL}/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        "temperature": 0.95,
+        "max_tokens": 500,
+    }
+
+    timeout = aiohttp.ClientTimeout(total=30)
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    data = await response.json()
+
+                    if response.status == 200 and "choices" in data:
+                        raw_text = data["choices"][0]["message"]["content"].strip()
+
+                        # Попытка извлечь JSON из ответа (иногда модель оборачивает в markdown)
+                        json_match = re.search(r'\{[\s\S]*\}', raw_text)
+                        if json_match:
+                            raw_text = json_match.group(0)
+
+                        import json
+                        result = json.loads(raw_text)
+
+                        # Валидация структуры
+                        if all(k in result for k in ("question", "options", "correct_answer", "explanation")):
+                            if isinstance(result["options"], list) and len(result["options"]) == 4:
+                                if result["correct_answer"] in result["options"]:
+                                    return result
+
+                        # Если структура невалидна — пробуем снова
+                        raise ValueError("Невалидная структура JSON от API")
+
+                    if response.status == 429:
+                        print(f"429 ошибка (лимит), попытка {attempt + 1}/{MAX_RETRIES}")
+                        await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                        continue
+
+                    error_msg = data.get("error", {}).get("message", str(data))
+                    raise Exception(f"Ошибка API {response.status}: {error_msg}")
+
+        except asyncio.TimeoutError:
+            print(f"Таймаут генерации квиза, попытка {attempt + 1}/{MAX_RETRIES}")
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                continue
+            raise Exception("Groq API не отвечает (таймаут)")
+
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Ошибка парсинг JSON квиза: {e}, попытка {attempt + 1}/{MAX_RETRIES}")
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAY)
+                continue
+            raise Exception(f"Не удалось сгенерировать корректный вопрос: {e}")
+
+        except Exception as e:
+            if "429" in str(e) and attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                continue
+            raise
+
+    raise Exception("Groq API недоступен после нескольких попыток")
