@@ -164,6 +164,15 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
             "Придумай совершенно новый вопрос!"
         )
 
+    level_examples = {
+        "A1": "She ___ to school every day. (go/goes/going/gone) — ПРОСТОЕ предложение, 1 грамматический аспект, базовая лексика.",
+        "A2": "I ___ this movie last week. (see/saw/seen/seeing) — простое предложение, 1-2 аспекта, бытовая лексика.",
+        "B1": "Neither my friends ___ I like coffee. (or/nor/and/but) — среднее предложение, базовые связки, 1-2 аспекта.",
+        "B2": "If I had known about the meeting, I ___ earlier. (would come/would have come/will come/came) — сложное предложение, 2+ аспекта, неочевидный ответ.",
+        "C1": "Scarcely ___ the door when the phone rang. (had I opened/I had opened/did I open/I opened) — очень сложное предложение, 3+ аспекта, инверсия, неочевидные варианты.",
+    }
+    level_example = level_examples.get(target_level, level_examples["B1"])
+
     level_requirements = {
         "A1": "Present Simple, Past Simple, Present Continuous. Простые слова (house, food, family). Короткие предложения.",
         "A2": "Present Perfect, Future Simple, модальные глаголы (can, must). Бытовая лексика. Простые связки.",
@@ -188,7 +197,13 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         "Твоя задача — создать ОДИН вопрос с множественным выбором (multiple choice) "
         "для проверки знаний английского языка.\n\n"
         f"Целевой уровень студента: {target_level}\n\n"
-        f"ТРЕБОВАНИЯ К УРОВНЮ {target_level}:\n{level_req}\n\n"
+        f"ПРИМЕР ВОПРОСА ДЛЯ УРОВНЯ {target_level}:\n{level_example}\n\n"
+        f"ТРЕБОВАНИЯ:\n"
+        f"- Сложность вопроса ДОЛЖНА точно соответствовать примеру выше.\n"
+        f"- Для A1/A2: простые предложения, базовая лексика, 1 грамматический аспект.\n"
+        f"- Для B1: средние предложения, базовые связки, 1-2 аспекта.\n"
+        f"- Для B2: сложные предложения, 2+ аспекта, неочевидные варианты.\n"
+        f"- Для C1: очень сложные предложения, 3+ аспекта, инверсия, эллипсис, продвинутая лексика.\n\n"
         "ОЦЕНИ САМ: после формулировки вопроса ОБЯЗАТЕЛЬНО определи его ИСТИННУЮ сложность "
         "и запиши в поле determined_level (одно из: A1, A2, B1, B2, C1). "
         "Если вопрос слишком простой или сложный для target_level — скорректируй его.\n\n"
@@ -266,8 +281,13 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
                             if isinstance(result["options"], list) and len(result["options"]) == 4:
                                 if result["correct_answer"] in result["options"]:
                                     if result["determined_level"] in ("A1", "A2", "B1", "B2", "C1"):
-                                        print(f"[QUIZ DEBUG] Вопрос сгенерирован! Уровень: {result['determined_level']}")
-                                        return result
+                                        # Проверка соответствия уровня
+                                        if result["determined_level"] == target_level:
+                                            print(f"[QUIZ DEBUG] Вопрос сгенерирован! Уровень: {result['determined_level']}")
+                                            return result
+                                        else:
+                                            print(f"[QUIZ DEBUG] Уровень не совпадает: запрошен {target_level}, получен {result['determined_level']}")
+                                            raise ValueError(f"Уровень не совпадает: запрошен {target_level}, получен {result['determined_level']}")
 
                         print(f"[QUIZ DEBUG] Невалидная структура: {list(result.keys()) if isinstance(result, dict) else type(result)}")
                         raise ValueError("Невалидная структура JSON от API")
