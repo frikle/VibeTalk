@@ -11,7 +11,9 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton,
 
 from database import (add_user, get_user, update_user, add_word, get_words,
                       delete_word, get_word_count, get_quiz_history,
-                      is_quiz_question_exists, add_quiz_question)
+                      is_quiz_question_exists, add_quiz_question,
+                      get_quiz_question_from_pool, get_pool_count,
+                      add_quiz_question_to_pool)
 from ai_client import ask_ai, API_KEY, generate_quiz_session_question
 from keyboards import (get_main_menu_keyboard, scenarios_keyboard, travel_keyboard,
                        study_keyboard, fun_keyboard, free_keyboard, mode_keyboard,
@@ -815,27 +817,35 @@ def get_random_scenario() -> tuple:
 async def _send_quiz_question(message, user_id: int, state: FSMContext, is_new_message: bool = False):
     """Генерирует и отправляет один вопрос квиза (helper для сессии).
 
+    Сначала берёт из пула предгенерированных вопросов.
+    Если пул пуст — генерирует через AI.
     При is_new_message=True отправляет новое сообщение, иначе edit_text.
     """
     data = await state.get_data()
     level = data.get("quiz_level", "B1")
     question_num = data.get("question_num", 1)
 
-    excluded = await get_quiz_history(user_id)
+    # Сначала пробуем взять из пула предгенерированных вопросов
+    quiz_data = await get_quiz_question_from_pool(user_id, level)
 
-    # 1 попытка сгенерировать уникальный вопрос (скорость)
-    quiz_data = None
-    try:
-        candidate = await generate_quiz_session_question(level, excluded)
-        if candidate and not await is_quiz_question_exists(user_id, candidate["question"]):
-            quiz_data = candidate
-    except Exception as e:
-        print(f"[QUIZ] Ошибка генерации: {e}")
+    # Если пул пуст — генерируем через AI
+    if not quiz_data:
+        excluded = await get_quiz_history(user_id)
+        try:
+            candidate = await generate_quiz_session_question(level, excluded)
+            if candidate and not await is_quiz_question_exists(user_id, candidate["question"]):
+                quiz_data = candidate
+                # Сохраняем сгенерированный вопрос в пул для будущих сессий
+                await add_quiz_question_to_pool(
+                    level, candidate["question"], candidate["options"],
+                    candidate["correct_answer"], candidate.get("explanation", "")
+                )
+        except Exception as e:
+            print(f"[QUIZ] Ошибка генерации: {e}")
 
-    # Fallback: пул вопросов конкретного уровня
+    # Fallback: встроенный пул
     if not quiz_data:
         from ai_client import QUIZ_POOLS
-        level = data.get("quiz_level", "B1")
         history = await get_quiz_history(user_id)
         pool = QUIZ_POOLS.get(level, QUIZ_POOLS["B1"])
         available = [q for q in pool if q["question"] not in history]
@@ -996,6 +1006,26 @@ def register_handlers(dp: Dispatcher):
         user_id = message.from_user.id
         await clear_quiz_history(user_id)
         await message.answer("История квиза очищена! Теперь вопросы могут повторяться.")
+
+    @dp.message(Command("quiz_generate"))
+    async def cmd_quiz_generate(message: Message):
+        """Предгенерирует вопросы для всех уровней (админ-команда)."""
+        from ai_client import pregenerate_quiz_questions
+
+        await message.answer("Начинаю предгенерацию вопросов для всех уровней...")
+
+        total = 0
+        for level in ["A1", "A2", "B1", "B2", "C1"]:
+            questions = await pregenerate_quiz_questions(level, count=20)
+            for q in questions:
+                added = await add_quiz_question_to_pool(
+                    level, q["question"], q["options"],
+                    q["correct_answer"], q.get("explanation", "")
+                )
+                if added:
+                    total += 1
+
+        await message.answer(f"Предгенерация завершена! Добавлено {total} новых вопросов.")
 
     @dp.callback_query(F.data.startswith("quiz_diff:"))
     async def callback_quiz_difficulty(callback: CallbackQuery, state: FSMContext):

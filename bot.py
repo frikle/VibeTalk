@@ -8,9 +8,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 
-from database import create_tables
+from database import create_tables, get_pool_count
 from handlers import register_handlers
-from ai_client import BOT_TOKEN
+from ai_client import BOT_TOKEN, pregenerate_quiz_questions
+from database import add_quiz_question_to_pool
 
 
 # Простой веб-сервер для прохождения проверки порта на Render
@@ -31,6 +32,30 @@ def run_server():
     server.serve_forever()
 
 
+async def _pregenerate_quiz_pool():
+    """Фоновое пополнение пула вопросов для квиза.
+    Генерирует вопросы для уровней, где пул меньше 20."""
+    await asyncio.sleep(5)  # Небольшая задержка после запуска
+
+    for level in ["A1", "A2", "B1", "B2", "C1"]:
+        count = await get_pool_count(level)
+        if count < 20:
+            try:
+                logger.info(f"Предгенерация вопросов для уровня {level} (текущий пул: {count})...")
+                questions = await pregenerate_quiz_questions(level, count=20)
+                added = 0
+                for q in questions:
+                    success = await add_quiz_question_to_pool(
+                        level, q["question"], q["options"],
+                        q["correct_answer"], q.get("explanation", "")
+                    )
+                    if success:
+                        added += 1
+                logger.info(f"Уровень {level}: добавлено {added} новых вопросов")
+            except Exception as e:
+                logger.error(f"Ошибка предгенерации для {level}: {e}")
+
+
 async def main():
     """Точка входа: инициализация бота, диспетчера и запуск Long Polling."""
     # Настройка логирования
@@ -43,6 +68,9 @@ async def main():
     # Создание таблиц в базе данных
     await create_tables()
     logger.info("База данных инициализирована")
+
+    # Предгенерация вопросов для квиза (если пул пуст)
+    asyncio.create_task(_pregenerate_quiz_pool())
 
     # Инициализация бота
     bot = Bot(token=BOT_TOKEN)

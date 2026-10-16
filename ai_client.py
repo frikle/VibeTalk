@@ -143,6 +143,33 @@ async def ask_ai(user_message: str, mode: str, level: str, scenario: str,
     raise Exception("Groq API недоступен после нескольких попыток")
 
 
+async def pregenerate_quiz_questions(level: str, count: int = 30) -> list:
+    """Предгенерирует несколько вопросов для уровня и возвращает список.
+
+    Args:
+        level: Уровень (A1, A2, B1, B2, C1).
+        count: Количество вопросов для генерации.
+
+    Returns:
+        list: Список словарей с вопросами.
+    """
+    questions = []
+    excluded = []
+
+    for _ in range(count):
+        try:
+            q = await generate_quiz_session_question(level, excluded)
+            if q:
+                questions.append(q)
+                excluded.append(q["question"])
+        except Exception as e:
+            print(f"[PREGEN] Ошибка генерации: {e}")
+            continue
+
+    print(f"[PREGEN] Сгенерировано {len(questions)} вопросов для уровня {level}")
+    return questions
+
+
 def _is_question_too_simple(question: str, target_level: str) -> bool:
     """Проверяет, слишком ли простой вопрос для целевого уровня.
 
