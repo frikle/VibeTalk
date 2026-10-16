@@ -165,20 +165,20 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         )
 
     level_examples = {
-        "A1": "She ___ to school every day. (go/goes/going/gone) — ПРОСТОЕ предложение, 1 грамматический аспект, базовая лексика.",
-        "A2": "I ___ this movie last week. (see/saw/seen/seeing) — простое предложение, 1-2 аспекта, бытовая лексика.",
-        "B1": "Neither my friends ___ I like coffee. (or/nor/and/but) — среднее предложение, базовые связки, 1-2 аспекта.",
-        "B2": "If I had known about the meeting, I ___ earlier. (would come/would have come/will come/came) — сложное предложение, 2+ аспекта, неочевидный ответ.",
-        "C1": "Scarcely ___ the door when the phone rang. (had I opened/I had opened/did I open/I opened) — очень сложное предложение, 3+ аспекта, инверсия, неочевидные варианты.",
+        "A1": "She ___ to school every day. (go/goes/going/gone)",
+        "A2": "I ___ this movie last week. (see/saw/seen/seeing)",
+        "B1": "She has been working here ___ 2015. (for/since/from/by)",
+        "B2": "If I had known about the meeting, I ___ earlier. (would come/would have come/will come/came)",
+        "C1": "Not until midnight ___ the correct solution. (they found/did they find/they had found/had they found)",
     }
     level_example = level_examples.get(target_level, level_examples["B1"])
 
     level_requirements = {
-        "A1": "Present Simple, Past Simple, Present Continuous. Простые слова (house, food, family). Короткие предложения.",
-        "A2": "Present Perfect, Future Simple, модальные глаголы (can, must). Бытовая лексика. Простые связки.",
-        "B1": "Present Perfect vs Past Simple, Passive Voice (present/past), Conditionals 0/1/2, относительные придаточные (who/which/that), герундий vs инфинитив. Средняя длина предложений.",
-        "B2": "Conditionals 2/3, Past Perfect, Future Perfect, инверсия (Not only...but also), субъунктив (I wish / If I were), сложные связки (despite, whereas, albeit), нюансированная лексика, difference between similar words (affect/effect, lie/lay). Вопросы должны содержать 2+ грамматических аспекта.",
-        "C1": "ТОЛЬКО продвинутые темы: эллипсис, инверсия (Never had I... / Scarcely had...), параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive, meticulous), регистр и стилистика, subtle grammar distinctions (present perfect vs past perfect in complex contexts), идиомы и фразовые глаголы с оттенками значения, сложные conditional structures (mixed conditionals). Вопросы должны содержать 3+ грамматических аспекта и неочевидные варианты ответов. НЕ используй простые конструкции типа neither...nor, not only...but also — это B1 уровень.",
+        "A1": "ИСПОЛЬЗУЙ ТОЛЬКО: Present Simple, Past Simple, Present Continuous. Простые слова (house, food, family, go, see). Короткие предложения (5-7 слов).",
+        "A2": "ИСПОЛЬЗУЙ ТОЛЬКО: Present Perfect, Future Simple, модальные глаголы (can, must, should). Бытовая лексика. Простые предложения (7-10 слов).",
+        "B1": "ИСПОЛЬЗУЙ: Present Perfect vs Past Simple, Passive Voice (present/past), Conditionals 0/1/2, относительные придаточные (who/which/that), герундий vs инфинитив. Средние предложения (10-15 слов).",
+        "B2": "ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ ОДНУ ИЗ ТЕМ: Conditionals 2/3 (mixed), Past Perfect, Future Perfect, инверсия (Not only...but also / Hardly...when), субъунктив (I wish / If I were), сложные связки (despite, whereas, albeit), нюансированная лексика (affect/effect, lie/lay, rise/raise). Сложные предложения (15+ слов). ЗАПРЕЩЕНО: If it rains, we will stay (это A2).",
+        "C1": "ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ ОДНУ ИЗ ТЕМ: инверсия (Not until... / Scarcely...when / Never had I...), эллипсис, параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive, meticulous, ubiquitous), регистр и стилистика, subtle grammar distinctions, идиомы и фразовые глаголы с оттенками значения, mixed conditionals, сложные conditional structures. Очень сложные предложения (20+ слов). КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО: If it rains, we will stay (A2), Neither...nor (B1), простые вопросы с одним пропуском, базовые условные конструкции If + Present will + V.",
     }
     level_req = level_requirements.get(target_level, level_requirements["B1"])
 
@@ -198,12 +198,11 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
         "для проверки знаний английского языка.\n\n"
         f"Целевой уровень студента: {target_level}\n\n"
         f"ПРИМЕР ВОПРОСА ДЛЯ УРОВНЯ {target_level}:\n{level_example}\n\n"
-        f"ТРЕБОВАНИЯ:\n"
-        f"- Сложность вопроса ДОЛЖНА точно соответствовать примеру выше.\n"
-        f"- Для A1/A2: простые предложения, базовая лексика, 1 грамматический аспект.\n"
-        f"- Для B1: средние предложения, базовые связки, 1-2 аспекта.\n"
-        f"- Для B2: сложные предложения, 2+ аспекта, неочевидные варианты.\n"
-        f"- Для C1: очень сложные предложения, 3+ аспекта, инверсия, эллипсис, продвинутая лексика.\n\n"
+        f"СТРОГИЕ ТРЕБОВАНИЯ ДЛЯ УРОВНЯ {target_level}:\n"
+        f"- ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ ОДНУ ИЗ ТЕМ: {'инверсия (Not until... / Scarcely...when / Never had I...), эллипсис, параллельные конструкции, продвинутая лексика (mitigate, albeit, comprehensive, meticulous, ubiquitous), регистр и стилистика, subtle grammar distinctions, идиомы и фразовые глаголы с оттенками значения, mixed conditionals, сложные conditional structures' if target_level == 'C1' else 'Conditionals 2/3 (mixed), Past Perfect, Future Perfect, инверсия (Not only...but also / Hardly...when), субъунктив (I wish / If I were), сложные связки (despite, whereas, albeit), нюансированная лексика (affect/effect, lie/lay, rise/raise)' if target_level == 'B2' else 'Present Perfect vs Past Simple, Passive Voice, Conditionals 0/1/2, герундий vs инфинитив' if target_level == 'B1' else 'простые конструкции базовых времен'}.\n"
+        f"- Очень сложные предложения (20+ слов).\n"
+        f"- КАТЕГОРИЧЕСКИ НЕ используй: If it rains, we will stay (это A2), Neither...nor (это B1), простые вопросы с одним пропуском, базовые условные конструкции типа If + Present, will + V.\n"
+        f"- Вопрос должен содержать 3+ грамматических аспекта и неочевидные варианты ответов.\n\n"
         "ОЦЕНИ САМ: после формулировки вопроса ОБЯЗАТЕЛЬНО определи его ИСТИННУЮ сложность "
         "и запиши в поле determined_level (одно из: A1, A2, B1, B2, C1). "
         "Если вопрос слишком простой или сложный для target_level — скорректируй его.\n\n"
