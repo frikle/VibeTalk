@@ -143,6 +143,98 @@ async def ask_ai(user_message: str, mode: str, level: str, scenario: str,
     raise Exception("Groq API недоступен после нескольких попыток")
 
 
+def _is_question_too_simple(question: str, target_level: str) -> bool:
+    """Проверяет, слишком ли простой вопрос для целевого уровня.
+
+    Returns:
+        True если вопрос нужно отклонить (слишком простой).
+    """
+    q = question.lower()
+
+    # Простые конструкции, которые нельзя использовать для B2/C1
+    simple_patterns = [
+        "if it rains",
+        "if i have",
+        "if she is",
+        "if he is",
+        "she's been working here",
+        "he's been working here",
+        "i have been",
+        "she has been",
+        "he has been",
+        "neither...nor",
+        "not only...but also",
+        "she ___ to school",
+        "he ___ to school",
+        "i ___ this movie",
+        "they ___ to the",
+        "we ___ at home",
+        "___ you ever been",
+        "___ she ever been",
+        "___ he ever been",
+        "the meeting is ___ monday",
+        "i've been studying english ___",
+        "she's been working here ___",
+        "he's been working here ___",
+        "i have lived here ___",
+        "she has lived here ___",
+        "he has lived here ___",
+    ]
+
+    # Для B2/C1 проверяем наличие простых паттернов
+    if target_level in ("B2", "C1"):
+        for pattern in simple_patterns:
+            if pattern in q:
+                return True
+
+    # Для C1 дополнительно проверяем, что вопрос содержит продвинутую лексику
+    if target_level == "C1":
+        advanced_words = [
+            "mitigate", "albeit", "comprehensive", "meticulous", "ubiquitous",
+            "scarcely", "never had", "not until", "hardly had", "no sooner",
+            "were it to", "had i known", "had she known", "had he known",
+            "i wish", "if i were", "if she were", "if he were",
+            "despite", "whereas", "albeit", "nevertheless", "furthermore",
+            "consequently", "subsequently", "predominantly", "inherently",
+        ]
+        has_advanced = any(word in q for word in advanced_words)
+        if not has_advanced:
+            return True
+
+    return False
+
+
+# Пулы вопросов для каждого уровня (fallback если AI не смог)
+QUIZ_POOLS = {
+    "A1": [
+        {"question": "She ___ to school every day.", "options": ["go", "goes", "going", "gone"], "correct_answer": "goes", "explanation": "Present Simple, 3-е лицо ед. ч. — goes."},
+        {"question": "I ___ this movie last week.", "options": ["see", "saw", "seen", "seeing"], "correct_answer": "saw", "explanation": "Past Simple от see — saw."},
+    ],
+    "A2": [
+        {"question": "She has been working here ___ 2015.", "options": ["for", "since", "from", "by"], "correct_answer": "since", "explanation": "Since + точка во времени."},
+        {"question": "I ___ this movie last week.", "options": ["see", "saw", "seen", "seeing"], "correct_answer": "saw", "explanation": "Past Simple от see — saw."},
+    ],
+    "B1": [
+        {"question": "Neither my friends ___ I like coffee.", "options": ["or", "nor", "and", "but"], "correct_answer": "nor", "explanation": "Neither...nor — ни...ни."},
+        {"question": "She has been working here ___ 2015.", "options": ["for", "since", "from", "by"], "correct_answer": "since", "explanation": "Since + точка во времени."},
+    ],
+    "B2": [
+        {"question": "If I had known about the meeting, I ___ earlier.", "options": ["would come", "would have come", "will come", "came"], "correct_answer": "would have come", "explanation": "Third Conditional: If + Past Perfect, would have + V3."},
+        {"question": "Not only ___ the exam, but she also got the highest score.", "options": ["she passed", "did she pass", "she had passed", "had she passed"], "correct_answer": "did she pass", "explanation": "Инверсия после Not only...but also."},
+    ],
+    "C1": [
+        {"question": "Not until midnight ___ the correct solution.", "options": ["they found", "did they find", "they had found", "had they found"], "correct_answer": "did they find", "explanation": "Инверсия после Not until: did + подлежащее + V1."},
+        {"question": "Scarcely ___ the door when the phone rang.", "options": ["had I opened", "I had opened", "did I open", "I opened"], "correct_answer": "had I opened", "explanation": "Scarcely...when + инверсия: had + подлежащее + V3."},
+        {"question": "Were it to rain, the match ___ cancelled.", "options": ["will be", "would be", "would have been", "had been"], "correct_answer": "would be", "explanation": "Инверсия в Conditional: Were + подлежащее + to V, would + V."},
+        {"question": "Had I known about the traffic, I ___ earlier.", "options": ["would leave", "would have left", "will leave", "left"], "correct_answer": "would have left", "explanation": "Инверсия в Third Conditional: Had + подлежащее + V3, would have + V3."},
+        {"question": "The report, ___ was submitted late, contained several errors.", "options": ["that", "which", "what", "it"], "correct_answer": "which", "explanation": "Неограничительное относительное придаточное с which."},
+        {"question": "He spoke loudly ___ everyone could hear him.", "options": ["so that", "because", "although", "despite"], "correct_answer": "so that", "explanation": "So that + could — цель действия."},
+        {"question": "The project was completed ___ the deadline.", "options": ["despite", "although", "because", "if"], "correct_answer": "despite", "explanation": "Despite + существительное — уступка."},
+        {"question": "She is believed ___ the competition.", "options": ["to win", "to have won", "winning", "won"], "correct_answer": "to have won", "explanation": "Passive + Perfect Infinitive: is believed to have V3."},
+    ],
+}
+
+
 async def generate_quiz_session_question(target_level: str, excluded_topics: list) -> dict:
     """Генерирует один вопрос для сессии квиза через Groq API.
 
@@ -282,6 +374,10 @@ async def generate_quiz_session_question(target_level: str, excluded_topics: lis
                                     if result["determined_level"] in ("A1", "A2", "B1", "B2", "C1"):
                                         # Проверка соответствия уровня
                                         if result["determined_level"] == target_level:
+                                            # Пост-генерационная фильтрация простых конструкций
+                                            if _is_question_too_simple(result["question"], target_level):
+                                                print(f"[QUIZ DEBUG] Вопрос слишком простой для {target_level}: {result['question'][:80]}")
+                                                raise ValueError("Вопрос слишком простой для уровня")
                                             print(f"[QUIZ DEBUG] Вопрос сгенерирован! Уровень: {result['determined_level']}")
                                             return result
                                         else:

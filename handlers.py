@@ -823,22 +823,22 @@ async def _send_quiz_question(message, user_id: int, state: FSMContext, is_new_m
 
     excluded = await get_quiz_history(user_id)
 
-    # До 2 попыток сгенерировать уникальный вопрос
+    # 1 попытка сгенерировать уникальный вопрос (скорость)
     quiz_data = None
-    for _ in range(2):
-        try:
-            candidate = await generate_quiz_session_question(level, excluded)
-            if not await is_quiz_question_exists(user_id, candidate["question"]):
-                quiz_data = candidate
-                break
-        except Exception as e:
-            print(f"[QUIZ] Ошибка генерации: {e}")
-            continue
+    try:
+        candidate = await generate_quiz_session_question(level, excluded)
+        if candidate and not await is_quiz_question_exists(user_id, candidate["question"]):
+            quiz_data = candidate
+    except Exception as e:
+        print(f"[QUIZ] Ошибка генерации: {e}")
 
-    # Fallback: встроенный пул
+    # Fallback: пул вопросов конкретного уровня
     if not quiz_data:
+        from ai_client import QUIZ_POOLS
+        level = data.get("quiz_level", "B1")
         history = await get_quiz_history(user_id)
-        available = [q for q in QUIZ_FALLBACK_QUESTIONS if q["question"] not in history]
+        pool = QUIZ_POOLS.get(level, QUIZ_POOLS["B1"])
+        available = [q for q in pool if q["question"] not in history]
         if available:
             quiz_data = random.choice(available)
         else:
